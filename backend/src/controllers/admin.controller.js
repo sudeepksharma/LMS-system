@@ -1,4 +1,4 @@
-const { prisma } = require('../config/db'); // Trigger restart for history endpoint
+const { prisma } = require("../config/db"); // Trigger restart for history endpoint
 
 // @desc    Get dashboard statistics for admin
 // @route   GET /api/admin/stats
@@ -6,26 +6,73 @@ const { prisma } = require('../config/db'); // Trigger restart for history endpo
 exports.getDashboardStats = async (req, res, next) => {
   try {
     const totalUsers = await prisma.user.count();
-    const totalStudents = await prisma.user.count({ where: { role: 'user' } });
-    const totalInstructors = await prisma.user.count({ where: { role: 'instructor' } });
-    const totalAdmins = await prisma.user.count({ where: { role: 'admin' } });
+    const totalStudents = await prisma.user.count({ where: { role: "user" } });
+    const totalInstructors = await prisma.user.count({
+      where: { role: "instructor" },
+    });
+    const totalAdmins = await prisma.user.count({ where: { role: "admin" } });
     const totalCourses = await prisma.course.count();
     const totalEnrollments = await prisma.enrollment.count();
-    const activeEnrollments = await prisma.enrollment.count({ where: { status: 'active' } });
-    const pendingUsers = await prisma.user.count({ where: { status: 'pending' } });
-    const pendingCourses = await prisma.course.count({ where: { status: 'pending' } });
+
+    const now = new Date();
+
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(now.getDate() - 7);
+
+    // Weekly enrollments (ROLLING 7 DAYS)
+    const weeklyEnrollments = await prisma.enrollment.count({
+      where: {
+        createdAt: {
+          gte: sevenDaysAgo,
+        },
+      },
+    });
+    //completed enrollments
+    const completedEnrollments = await prisma.enrollment.count({
+      where: {
+        status: "completed",
+      },
+    });
+
+    let completionRate = 0;
+
+    if (totalEnrollments > 0) {
+      completionRate = (completedEnrollments / totalEnrollments) * 100;
+    }
+
+    completionRate = Number(completionRate.toFixed(2));
+    const activeEnrollments = await prisma.enrollment.count({
+      where: { status: "active" },
+    });
+
+    const pendingUsers = await prisma.user.count({
+      where: { status: "pending" },
+    });
+    const pendingCourses = await prisma.course.count({
+      where: { status: "pending" },
+    });
 
     // Calculate revenue
     const allEnrollments = await prisma.enrollment.findMany({
-      include: { course: { select: { price: true } } }
+      include: { course: { select: { price: true } } },
     });
-    const totalRevenue = allEnrollments.reduce((sum, enr) => sum + (enr.course?.price || 0), 0);
+    const totalRevenue = allEnrollments.reduce(
+      (sum, enr) => sum + (enr.course?.price || 0),
+      0,
+    );
 
     // Get recent 5 users for activity feed
     const recentUsers = await prisma.user.findMany({
       take: 5,
-      orderBy: { createdAt: 'desc' },
-      select: { id: true, name: true, email: true, role: true, status: true, createdAt: true }
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        status: true,
+        createdAt: true,
+      },
     });
 
     res.status(200).json({
@@ -37,12 +84,15 @@ exports.getDashboardStats = async (req, res, next) => {
         totalAdmins,
         totalCourses,
         totalEnrollments,
+        weeklyEnrollments,
+        completedEnrollments,
+        completionRate,
         activeEnrollments,
         totalRevenue,
         pendingUsers,
         pendingCourses,
-        recentUsers
-      }
+        recentUsers,
+      },
     });
   } catch (error) {
     next(error);
@@ -54,7 +104,15 @@ exports.getDashboardStats = async (req, res, next) => {
 // @access  Private/Admin
 exports.getAdminUsers = async (req, res, next) => {
   try {
-    const { page = 1, limit = 10, sortBy = 'createdAt', sortOrder = 'desc', search, role, status } = req.query;
+    const {
+      page = 1,
+      limit = 10,
+      sortBy = "createdAt",
+      sortOrder = "desc",
+      search,
+      role,
+      status,
+    } = req.query;
 
     const pageNumber = parseInt(page, 10);
     const limitNumber = parseInt(limit, 10);
@@ -67,14 +125,14 @@ exports.getAdminUsers = async (req, res, next) => {
 
     if (search) {
       where.OR = [
-        { name: { contains: search, mode: 'insensitive' } },
-        { email: { contains: search, mode: 'insensitive' } }
+        { name: { contains: search, mode: "insensitive" } },
+        { email: { contains: search, mode: "insensitive" } },
       ];
     }
 
     const orderBy = {};
     if (sortBy) {
-      orderBy[sortBy] = sortOrder === 'asc' ? 'asc' : 'desc';
+      orderBy[sortBy] = sortOrder === "asc" ? "asc" : "desc";
     }
 
     const [users, total] = await Promise.all([
@@ -83,9 +141,16 @@ exports.getAdminUsers = async (req, res, next) => {
         orderBy,
         skip,
         take: limitNumber,
-        select: { id: true, name: true, email: true, role: true, status: true, createdAt: true }
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          status: true,
+          createdAt: true,
+        },
       }),
-      prisma.user.count({ where })
+      prisma.user.count({ where }),
     ]);
 
     res.status(200).json({
@@ -96,8 +161,8 @@ exports.getAdminUsers = async (req, res, next) => {
         total,
         page: pageNumber,
         limit: limitNumber,
-        totalPages: Math.ceil(total / limitNumber)
-      }
+        totalPages: Math.ceil(total / limitNumber),
+      },
     });
   } catch (error) {
     next(error);
@@ -117,7 +182,7 @@ exports.updateUserStatus = async (req, res, next) => {
     const user = await prisma.user.update({
       where: { id: req.params.id },
       data: updateData,
-      select: { id: true, name: true, email: true, role: true, status: true }
+      select: { id: true, name: true, email: true, role: true, status: true },
     });
     res.status(200).json({ success: true, data: user });
   } catch (error) {
@@ -142,7 +207,16 @@ exports.deleteAdminUser = async (req, res, next) => {
 // @access  Private/Admin
 exports.getAdminCourses = async (req, res, next) => {
   try {
-    const { page = 1, limit = 10, sortBy = 'createdAt', sortOrder = 'desc', search, status, category, level } = req.query;
+    const {
+      page = 1,
+      limit = 10,
+      sortBy = "createdAt",
+      sortOrder = "desc",
+      search,
+      status,
+      category,
+      level,
+    } = req.query;
 
     const pageNumber = parseInt(page, 10);
     const limitNumber = parseInt(limit, 10);
@@ -156,15 +230,15 @@ exports.getAdminCourses = async (req, res, next) => {
 
     if (search) {
       where.OR = [
-        { title: { contains: search, mode: 'insensitive' } },
-        { description: { contains: search, mode: 'insensitive' } },
-        { celebrityTeacher: { contains: search, mode: 'insensitive' } }
+        { title: { contains: search, mode: "insensitive" } },
+        { description: { contains: search, mode: "insensitive" } },
+        { celebrityTeacher: { contains: search, mode: "insensitive" } },
       ];
     }
 
     const orderBy = {};
     if (sortBy) {
-      orderBy[sortBy] = sortOrder === 'asc' ? 'asc' : 'desc';
+      orderBy[sortBy] = sortOrder === "asc" ? "asc" : "desc";
     }
 
     const [courses, total] = await Promise.all([
@@ -175,10 +249,10 @@ exports.getAdminCourses = async (req, res, next) => {
         take: limitNumber,
         include: {
           instructor: { select: { id: true, name: true, email: true } },
-          _count: { select: { enrollments: true } }
-        }
+          _count: { select: { enrollments: true } },
+        },
       }),
-      prisma.course.count({ where })
+      prisma.course.count({ where }),
     ]);
 
     res.status(200).json({
@@ -189,8 +263,8 @@ exports.getAdminCourses = async (req, res, next) => {
         total,
         page: pageNumber,
         limit: limitNumber,
-        totalPages: Math.ceil(total / limitNumber)
-      }
+        totalPages: Math.ceil(total / limitNumber),
+      },
     });
   } catch (error) {
     next(error);
@@ -206,7 +280,7 @@ exports.updateCourseStatus = async (req, res, next) => {
     const course = await prisma.course.update({
       where: { id: req.params.id },
       data: { status },
-      include: { instructor: { select: { id: true, name: true } } }
+      include: { instructor: { select: { id: true, name: true } } },
     });
     res.status(200).json({ success: true, data: course });
   } catch (error) {
@@ -234,13 +308,13 @@ exports.getPendingCertificates = async (req, res, next) => {
     const enrollments = await prisma.enrollment.findMany({
       where: {
         progress: 100,
-        certificateApproved: false
+        certificateApproved: false,
       },
       include: {
         user: { select: { id: true, name: true, email: true } },
-        course: { select: { id: true, title: true } }
+        course: { select: { id: true, title: true } },
       },
-      orderBy: { updatedAt: 'asc' }
+      orderBy: { updatedAt: "asc" },
     });
     res.status(200).json({ success: true, data: enrollments });
   } catch (error) {
@@ -255,7 +329,7 @@ exports.approveCertificate = async (req, res, next) => {
   try {
     const enrollment = await prisma.enrollment.update({
       where: { id: req.params.id },
-      data: { certificateApproved: true }
+      data: { certificateApproved: true },
     });
     res.status(200).json({ success: true, data: enrollment });
   } catch (error) {
@@ -271,13 +345,13 @@ exports.getApprovedCertificates = async (req, res, next) => {
     const enrollments = await prisma.enrollment.findMany({
       where: {
         progress: 100,
-        certificateApproved: true
+        certificateApproved: true,
       },
       include: {
         user: { select: { id: true, name: true, email: true } },
-        course: { select: { id: true, title: true } }
+        course: { select: { id: true, title: true } },
       },
-      orderBy: { updatedAt: 'desc' }
+      orderBy: { updatedAt: "desc" },
     });
     res.status(200).json({ success: true, data: enrollments });
   } catch (error) {
