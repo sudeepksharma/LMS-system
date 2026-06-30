@@ -11,7 +11,21 @@ exports.getDashboardStats = async (req, res, next) => {
     const totalAdmins = await prisma.user.count({ where: { role: 'admin' } });
     const totalCourses = await prisma.course.count();
     const totalEnrollments = await prisma.enrollment.count();
+    const now = new Date();
+
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(now.getDate() - 7);
+
+    // Weekly enrollments (ROLLING 7 DAYS)
+    const weeklyEnrollments = await prisma.enrollment.count({
+      where: {
+        createdAt: {
+          gte: sevenDaysAgo,
+        },
+      },
+    });
     const activeEnrollments = await prisma.enrollment.count({ where: { status: 'active' } });
+   
     const pendingUsers = await prisma.user.count({ where: { status: 'pending' } });
     const pendingCourses = await prisma.course.count({ where: { status: 'pending' } });
 
@@ -37,6 +51,7 @@ exports.getDashboardStats = async (req, res, next) => {
         totalAdmins,
         totalCourses,
         totalEnrollments,
+        weeklyEnrollments, 
         activeEnrollments,
         totalRevenue,
         pendingUsers,
