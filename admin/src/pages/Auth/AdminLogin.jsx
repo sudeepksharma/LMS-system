@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { MdArrowBack, MdClose, MdEmail, MdVisibility, MdVisibilityOff } from 'react-icons/md';
 import { FaCss3Alt, FaDocker, FaGitAlt, FaGithub, FaHtml5, FaJava, FaJs, FaNodeJs, FaPython, FaReact } from 'react-icons/fa';
 import { SiCplusplus, SiTypescript } from 'react-icons/si';
-import logo from '../../assets/logo.webp';
 import { apiRequest, storeAdminAuth } from '../../utils/api';
 
 const techIcons = [
@@ -97,7 +96,7 @@ const AdminLogin = () => {
         </button>
 
         <div className="text-center mb-6">
-          <img src={logo} alt="UptoSkills Logo" className="mx-auto h-12 mb-4" />
+          <img src="/favicon.svg" alt="UptoSkills Logo" className="mx-auto h-12 mb-4" />
           <h2 className="text-3xl font-bold text-[#f8fafc] mb-2 tracking-tight">Admin Sign In</h2>
           <p className="text-[#cbd5e1] text-sm mb-4">Use the backend admin account to manage real database users.</p>
           <div className="bg-blue-500/10 border border-blue-500/30 p-2.5 rounded-lg text-xs text-blue-200 flex flex-col gap-1 items-center justify-center">
